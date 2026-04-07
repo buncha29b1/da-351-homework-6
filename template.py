@@ -7,7 +7,7 @@ app = marimo.App(width="medium")
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    __[Add your name here!]__
+    __[Khoi Van]__
 
     # Coding Homework 6: Advanced Image Classification
 
