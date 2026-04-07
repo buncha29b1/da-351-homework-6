@@ -40,6 +40,7 @@ def _():
         np,
         os,
         pd,
+        plt,
         tf,
     )
 
@@ -252,15 +253,7 @@ def _(mo):
 
 
 @app.cell
-def _(
-    accuracy_score,
-    classification_report,
-    confusion_matrix,
-    model,
-    np,
-    os,
-    tf,
-):
+def _(model, np, os, tf):
     # Define the parent folder paths based on your task difficulty pairings
     # Ensure these match the actual names of your parent folders
     parent_folders = ['easy', 'medium', 'hard']
@@ -273,7 +266,7 @@ def _(
         print(f"==================================================")
         print(f"RESULTS FOR: {parent_folder.upper()} TASK")
         print(f"==================================================")
-    
+
         # 1. Load data using the specified folder structure
         # image_dataset_from_directory automatically treats subfolders (class_a_folder, class_b_folder) as classes
         if not os.path.exists(parent_folder):
@@ -286,49 +279,31 @@ def _(
             image_size=IMG_SIZE,
             batch_size=BATCH_SIZE
         )
-    
+
         class_names = dataset.class_names
         print(f"Comparing: {class_names[0]} vs {class_names[1]}\n")
 
         # Extract true labels sequentially from the dataset
         y_true = np.concatenate([y for x, y in dataset], axis=0)
-    
+
         # Assuming your trained model is stored in a variable named 'model'
         # If you have separate models for each task, you would load them dynamically here 
         # e.g., model = tf.keras.models.load_model(f'{parent_folder}_model.keras')
-    
+
         try:
             # Generate predictions
             y_pred_probs = model.predict(dataset)
-        
+
             # Convert probabilities to binary class predictions (0 or 1)
             y_pred = (y_pred_probs > 0.5).astype(int).flatten()
-        
-            # Calculate Metrics
-            acc = accuracy_score(y_true, y_pred)
-            cm = confusion_matrix(y_true, y_pred)
-        
-            # Ravel the confusion matrix. Assuming binary classification (2 classes)
-            tn, fp, fn, tp = cm.ravel()
-        
-            # Generate classification report for precision, recall, and F1-score
-            report = classification_report(y_true, y_pred, target_names=class_names)
-        
-            print(f"1. Overall Accuracy: {acc:.4f}\n")
-            print(f"2. Confusion Matrix:")
-            print(f"   True Positives (TP):  {tp}")
-            print(f"   True Negatives (TN):  {tn}")
-            print(f"   False Positives (FP): {fp}")
-            print(f"   False Negatives (FN): {fn}\n")
-            print(f"3. Per Class Precision and Recall:\n{report}\n")
-        
+
         except NameError:
             print("Error: The 'model' variable is not defined. Make sure you have trained and assigned your model.")
 
     # Run the evaluation loop over the 3 folder structures
     for folder in parent_folders:
         evaluate_task(folder)
-    return
+    return BATCH_SIZE, IMG_SIZE, folder, parent_folders
 
 
 @app.cell
@@ -342,6 +317,76 @@ def _(mo):
     2. A confusion matrix of your validation set's True Positives, True Negatives, False Negatives, and False Positives
     3. Per class precision and recall (using `scikit-learn` functions)
     """)
+    return
+
+
+@app.cell
+def _(
+    BATCH_SIZE,
+    IMG_SIZE,
+    accuracy_score,
+    classification_report,
+    confusion_matrix,
+    folder,
+    model,
+    np,
+    os,
+    parent_folders,
+    plt,
+    tf,
+):
+    for folder1 in parent_folders:
+        print(f"==================================================")
+        print(f"METRICS FOR: {folder1.upper()} TASK")
+        print(f"==================================================")
+    
+        if not os.path.exists(folder1):
+            print(f"Directory '{folder1}' not found. Skipping...\n")
+            continue
+        
+        dataset = tf.keras.utils.image_dataset_from_directory(
+            folder1,
+            shuffle=False,
+            image_size=IMG_SIZE,
+            batch_size=BATCH_SIZE
+        )
+    
+        # Extract true labels
+        y_true = np.concatenate([y for x, y in dataset], axis=0)
+    
+        # Generate predictions
+        y_pred_probs = model.predict(dataset)
+        y_pred = (y_pred_probs > 0.5).astype(int).flatten()
+    
+        # 1. Report Overall accuracy
+        acc = accuracy_score(y_true, y_pred)
+        print(f"Overall Accuracy: {acc:.4f}\n")
+    
+        # 2. Report Confusion Matrix using matplotlib
+        cm = confusion_matrix(y_true, y_pred)
+    
+        fig, ax = plt.subplots(figsize=(6, 6))
+        cax = ax.matshow(cm, cmap=plt.cm.Blues, alpha=0.7)
+        plt.title(f"Confusion Matrix: {folder.capitalize()} Task", pad=20)
+        fig.colorbar(cax)
+    
+        # Annotate TP, TN, FP, FN counts directly on the matrix
+        for k in range(cm.shape[0]):
+            for j in range(cm.shape[1]):
+                ax.text(j, k, str(cm[k, j]), va='center', ha='center', fontsize=12, fontweight='bold')
+            
+        plt.xlabel('Predicted Label', fontsize=11)
+        plt.ylabel('True Label', fontsize=11)
+        ax.set_xticks([0, 1])
+        ax.set_yticks([0, 1])
+        ax.set_xticklabels(dataset.class_names)
+        ax.set_yticklabels(dataset.class_names)
+        plt.show()
+    
+        # 3. Report Per class precision and recall
+        print("Classification Report (Precision & Recall):")
+        print(classification_report(y_true, y_pred, target_names=dataset.class_names))
+        print("\n")
     return
 
 
