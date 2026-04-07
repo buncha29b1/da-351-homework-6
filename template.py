@@ -390,7 +390,7 @@ def _(
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
     ### Interpretation
@@ -403,12 +403,18 @@ def _(mo):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    [ your written response here]
+    The model's performance on the test sets yielded several unexpected results that directly challenge the initial biological hypotheses.
+
+    * Easy Task (Pelican vs. Hummingbird): Contrary to the hypothesis that this would be the simplest task due to distinct morphologies, it was actually the worst-performing model with an overall accuracy of 0.4167. The model failed to learn the "obvious" macroscopic differences, correctly identifying only 6 Hummingbirds out of 60.
+    * Medium Task (Blue Jay vs. Cardinal): This task aligned most closely with the hypothesis, emerging as the most successful model with an Overall Accuracy of 0.6239. While far from perfect, the model likely leveraged the stark color contrast to achieve its highest performance tier.
+    * Hard Task (Sparrows): The hypothesis predicted this would be the hardest task. However, it achieved an Overall Accuracy of 0.5083, significantly outperforming the "Easy" task. While still struggling with fine-grained details, the model showed a better ability to distinguish these similar species than it did with the Pelican and Hummingbird.
+
+    The most surprising takeaway is the total failure of the "Easy" task. In deep learning, macroscopic differences usually yield high accuracy. The fact that the sparrow model (Hard) outperformed the pelican/hummingbird model (Easy) suggests that the CNN may be focusing on "background noise" (like foliage vs. water) or that the training data for the "Easy" classes lacked the internal consistency the model needed to generalize.
     """)
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
     2. Discuss the precision and recall scores of each class for your various models. What seems to be your strongest model and why?
@@ -419,12 +425,24 @@ def _(mo):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    [ your written response here]
+    The classification reports reveal a significant "majority-class" bias across all three tasks, where the model essentially defaults to one species per pair.
+
+    | Task | Class | Precision | Recall | F1-Score | Support |
+    | :--- | :--- | :--- | :--- | :--- | :--- |
+    | **Easy** | Hummingbird | 0.27 | 0.10 | 0.15 | 60 |
+    | | Brown Pelican | 0.45 | 0.73 | 0.56 | 60 |
+    | **Medium** | Cardinal | **0.84** | 0.28 | 0.42 | 57 |
+    | | Blue Jay | 0.58 | **0.95** | **0.72** | 60 |
+    | **Hard** | White-crowned Sparrow | 0.53 | 0.13 | 0.21 | 60 |
+    | | White-throated Sparrow | 0.50 | 0.88 | 0.64 | 60 |
+
+    **Strongest Model:**
+    The Medium Task (Blue Jay vs. Cardinal) is the strongest model. It boasts the highest F1-score (0.72) and the highest Precision (0.84) of any individual class. This indicates that while the model has a bias toward Blue Jays (high recall), its "guesses" for Cardinals are highly reliable when they do occur.
     """)
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
     3. As a whole, what does this analysis tell us? What are the strengths/limitations of  this data set? What are the strengths/limitations of this method? What is one future direction you could envision for future data analysts or data collectors?
@@ -432,7 +450,17 @@ def _(mo):
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    * The dataset is well-structured for testing specific biological similarities. However, a major limitation is the potential for "leaky" features—environmental cues (backgrounds) that the model learns instead of the birds themselves. The low accuracy across the board suggests the dataset might need more varied training examples to help the model ignore the background.
+    * Using a standard CNN architecture is a strength for general image recognition, but a limitation for fine-grained classification. Without an attention mechanism or higher resolution, the model cannot "zoom in" on the specific crown stripes or throat patches that define the sparrow species.
+    * A valuable direction for future analysts would be the implementation of Transfer Learning using pre-trained models (like ResNet or EfficientNet). By starting with a model that already "knows" how to see shapes and textures, analysts can fine-tune it to focus on the subtle biological markers that this basic CNN missed.
+    """)
+    return
+
+
+@app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
     4. Take a step back and analyze your own use of code. Provide some rationale for choices you've made. How did you (or how might we) refactor the code to avoid repeating the same blocks three times?
@@ -443,7 +471,11 @@ def _(mo):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    [ your written response here]
+    The code utilized `classification_report` and `confusion_matrix` from `sklearn.metrics`, which is the industry standard for evaluating multi-class performance. This choice provides a granular look at where the model fails (e.g., distinguishing between high precision and high recall) rather than relying on accuracy alone, which can be misleading in biased models.
+
+    A primary observation in the current code is that the titles of the Confusion Matrices for the "Easy" and "Medium" tasks still erroneously read "Hard Task." This is a side effect of manually copying and pasting code blocks.
+
+    To avoid repeating the same blocks three times and eliminate labeling errors, the code should be refactored into a reusable function combined with a list of dictionaries.
     """)
     return
 
