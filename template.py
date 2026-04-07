@@ -29,6 +29,7 @@ def _():
     from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
     import numpy as np
     import os
+    import matplotlib.pyplot as plt
 
     return (
         Counter,
