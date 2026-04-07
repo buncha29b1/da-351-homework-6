@@ -26,8 +26,21 @@ def _():
     import tensorflow as tf
     import pandas as pd
     from collections import Counter
+    from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
+    import numpy as np
+    import os
 
-    return Counter, mo, pd, tf
+    return (
+        Counter,
+        accuracy_score,
+        classification_report,
+        confusion_matrix,
+        mo,
+        np,
+        os,
+        pd,
+        tf,
+    )
 
 
 @app.cell
@@ -217,9 +230,103 @@ def _(mo):
     return
 
 
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### 2. Select Bird Species to Classify
+
+    #### Easy Task: 100. Brown Pelican vs. 068. Ruby-throated Hummingbird
+
+    - Hypothesis: Differentiating these two species will be an easy task for the model. These birds have drastically distinct morphologies, sizes, and characteristic environments. The pelican features a large body, distinctive bill, and a predominantly brown/gray color palette, whereas the hummingbird is tiny with iridescent green and red feathers. The Convolutional Neural Network (CNN) should rapidly learn these obvious macroscopic and color-based differences, resulting in high accuracy and few misclassifications.
+
+    #### Medium Task: 073. Blue Jay vs. 017. Cardinal
+
+    - Hypothesis: This task will present a medium level of difficulty. Both species are similarly sized passerine birds with crests on their heads, and they are often photographed in similar environments (such as backyard feeders or tree branches). While their physical silhouettes and backgrounds share similarities, they have stark, contrasting primary colors (bright blue vs. bright red). The model will likely rely heavily on these color channel differences to achieve a reasonably high accuracy, but may make occasional errors if lighting conditions obscure the colors or if the images are predominantly in grayscale.
+
+    #### Hard Task: 132. White-crowned Sparrow vs. 133. White-throated Sparrow
+
+    - Hypothesis: Differentiating these two sparrows will be a hard task. Because they belong to the same family, they share nearly identical body shapes, beak structures, typical postures, and overall brown-streaked plumage. The primary visual differences are fine-grained, localized details on their heads (the presence of a white throat patch vs. specific crown striping). A basic CNN might struggle to focus on these localized, subtle features without an attention mechanism, leading to a higher rate of false positives and false negatives, and an overall lower accuracy.
+    """)
+    return
+
+
 @app.cell
-def _():
-    # your code here 
+def _(
+    accuracy_score,
+    classification_report,
+    confusion_matrix,
+    model,
+    np,
+    os,
+    tf,
+):
+    # Define the parent folder paths based on your task difficulty pairings
+    # Ensure these match the actual names of your parent folders
+    parent_folders = ['easy', 'medium', 'hard']
+
+    # Standard image size and batch size for the model
+    IMG_SIZE = (200, 200) 
+    BATCH_SIZE = 32
+
+    def evaluate_task(parent_folder):
+        print(f"==================================================")
+        print(f"RESULTS FOR: {parent_folder.upper()} TASK")
+        print(f"==================================================")
+    
+        # 1. Load data using the specified folder structure
+        # image_dataset_from_directory automatically treats subfolders (class_a_folder, class_b_folder) as classes
+        if not os.path.exists(parent_folder):
+            print(f"Directory '{parent_folder}' not found. Please ensure the path is correct.\n")
+            return
+
+        dataset = tf.keras.utils.image_dataset_from_directory(
+            parent_folder,
+            shuffle=False, # Shuffle must be False to align predictions with true labels
+            image_size=IMG_SIZE,
+            batch_size=BATCH_SIZE
+        )
+    
+        class_names = dataset.class_names
+        print(f"Comparing: {class_names[0]} vs {class_names[1]}\n")
+
+        # Extract true labels sequentially from the dataset
+        y_true = np.concatenate([y for x, y in dataset], axis=0)
+    
+        # Assuming your trained model is stored in a variable named 'model'
+        # If you have separate models for each task, you would load them dynamically here 
+        # e.g., model = tf.keras.models.load_model(f'{parent_folder}_model.keras')
+    
+        try:
+            # Generate predictions
+            y_pred_probs = model.predict(dataset)
+        
+            # Convert probabilities to binary class predictions (0 or 1)
+            y_pred = (y_pred_probs > 0.5).astype(int).flatten()
+        
+            # Calculate Metrics
+            acc = accuracy_score(y_true, y_pred)
+            cm = confusion_matrix(y_true, y_pred)
+        
+            # Ravel the confusion matrix. Assuming binary classification (2 classes)
+            tn, fp, fn, tp = cm.ravel()
+        
+            # Generate classification report for precision, recall, and F1-score
+            report = classification_report(y_true, y_pred, target_names=class_names)
+        
+            print(f"1. Overall Accuracy: {acc:.4f}\n")
+            print(f"2. Confusion Matrix:")
+            print(f"   True Positives (TP):  {tp}")
+            print(f"   True Negatives (TN):  {tn}")
+            print(f"   False Positives (FP): {fp}")
+            print(f"   False Negatives (FN): {fn}\n")
+            print(f"3. Per Class Precision and Recall:\n{report}\n")
+        
+        except NameError:
+            print("Error: The 'model' variable is not defined. Make sure you have trained and assigned your model.")
+
+    # Run the evaluation loop over the 3 folder structures
+    for folder in parent_folders:
+        evaluate_task(folder)
     return
 
 
