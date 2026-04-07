@@ -339,42 +339,42 @@ def _(
         print(f"==================================================")
         print(f"METRICS FOR: {folder1.upper()} TASK")
         print(f"==================================================")
-    
+
         if not os.path.exists(folder1):
             print(f"Directory '{folder1}' not found. Skipping...\n")
             continue
-        
+
         dataset = tf.keras.utils.image_dataset_from_directory(
             folder1,
             shuffle=False,
             image_size=IMG_SIZE,
             batch_size=BATCH_SIZE
         )
-    
+
         # Extract true labels
         y_true = np.concatenate([y for x, y in dataset], axis=0)
-    
+
         # Generate predictions
         y_pred_probs = model.predict(dataset)
         y_pred = (y_pred_probs > 0.5).astype(int).flatten()
-    
+
         # 1. Report Overall accuracy
         acc = accuracy_score(y_true, y_pred)
         print(f"Overall Accuracy: {acc:.4f}\n")
-    
+
         # 2. Report Confusion Matrix using matplotlib
         cm = confusion_matrix(y_true, y_pred)
-    
+
         fig, ax = plt.subplots(figsize=(6, 6))
         cax = ax.matshow(cm, cmap=plt.cm.Blues, alpha=0.7)
         plt.title(f"Confusion Matrix: {folder.capitalize()} Task", pad=20)
         fig.colorbar(cax)
-    
+
         # Annotate TP, TN, FP, FN counts directly on the matrix
         for k in range(cm.shape[0]):
             for j in range(cm.shape[1]):
                 ax.text(j, k, str(cm[k, j]), va='center', ha='center', fontsize=12, fontweight='bold')
-            
+
         plt.xlabel('Predicted Label', fontsize=11)
         plt.ylabel('True Label', fontsize=11)
         ax.set_xticks([0, 1])
@@ -382,7 +382,7 @@ def _(
         ax.set_xticklabels(dataset.class_names)
         ax.set_yticklabels(dataset.class_names)
         plt.show()
-    
+
         # 3. Report Per class precision and recall
         print("Classification Report (Precision & Recall):")
         print(classification_report(y_true, y_pred, target_names=dataset.class_names))
