@@ -443,15 +443,15 @@ def _(
 
 @app.cell
 def _(cm_base_df, cm_bbox_df, plt, sns):
-    fig, ax = plt.subplots(1, 2, figsize=(14, 5))
-    sns.heatmap(cm_base_df, cmap="rocket_r", ax=ax[0])
-    sns.heatmap(cm_bbox_df, cmap="rocket_r", ax=ax[1])
-    ax[0].set_title("Baseline CNN confusion matrix")
-    ax[1].set_title("HITL bbox CNN confusion matrix")
-    ax[0].set_xlabel("Predicted")
-    ax[0].set_ylabel("True")
-    ax[1].set_xlabel("Predicted")
-    ax[1].set_ylabel("True")
+    fig1, ax1 = plt.subplots(1, 2, figsize=(14, 5))
+    sns.heatmap(cm_base_df, cmap="rocket_r", ax=ax1[0])
+    sns.heatmap(cm_bbox_df, cmap="rocket_r", ax=ax1[1])
+    ax1[0].set_title("Baseline CNN confusion matrix")
+    ax1[1].set_title("HITL bbox CNN confusion matrix")
+    ax1[0].set_xlabel("Predicted")
+    ax1[0].set_ylabel("True")
+    ax1[1].set_xlabel("Predicted")
+    ax1[1].set_ylabel("True")
     plt.tight_layout()
     return
 
@@ -543,7 +543,7 @@ def _(
 
     sample_rows = test_cap.sample(4, random_state=351).reset_index(drop=True)
 
-    fig, ax = plt.subplots(4, 3, figsize=(11, 14))
+    fig2, ax2 = plt.subplots(4, 3, figsize=(11, 14))
     inside_scores = []
 
     for i, row in sample_rows.iterrows():
@@ -591,15 +591,15 @@ def _(
         inside_mass_bbox = heat_bbox_r.sum() / (heat_bbox_r.sum() + 1e-8)  # cropped image is mostly bird region
         inside_scores.append((inside_mass_base, inside_mass_bbox))
 
-        ax[i, 0].imshow(base_img)
-        ax[i, 0].set_title("Baseline input")
-        ax[i, 1].imshow(ov_base)
-        ax[i, 1].set_title(f"Baseline Grad-CAM\ninside-box={inside_mass_base:.2f}")
-        ax[i, 2].imshow(ov_bbox)
-        ax[i, 2].set_title(f"BBox Grad-CAM\ninside-region={inside_mass_bbox:.2f}")
+        ax2[i, 0].imshow(base_img)
+        ax2[i, 0].set_title("Baseline input")
+        ax2[i, 1].imshow(ov_base)
+        ax2[i, 1].set_title(f"Baseline Grad-CAM\ninside-box={inside_mass_base:.2f}")
+        ax2[i, 2].imshow(ov_bbox)
+        ax2[i, 2].set_title(f"BBox Grad-CAM\ninside-region={inside_mass_bbox:.2f}")
 
         for j in range(3):
-            ax[i, j].axis("off")
+            ax2[i, j].axis("off")
 
     plt.tight_layout()
 
