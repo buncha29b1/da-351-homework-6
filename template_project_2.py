@@ -1,14 +1,42 @@
 import marimo
 
-__generated_with = "0.20.2"
+__generated_with = "0.23.3"
 app = marimo.App(width="medium")
 
 
 @app.cell
 def _():
     import marimo as mo
+    import os
+    import random
+    from dataclasses import dataclass
 
-    return (mo,)
+    import matplotlib.pyplot as plt
+    import numpy as np
+    import pandas as pd
+    import seaborn as sns
+    import tensorflow as tf
+    from sklearn.metrics import (
+        accuracy_score,
+        classification_report,
+        confusion_matrix,
+        f1_score,
+    )
+
+    return (
+        accuracy_score,
+        classification_report,
+        confusion_matrix,
+        f1_score,
+        mo,
+        np,
+        os,
+        pd,
+        plt,
+        random,
+        sns,
+        tf,
+    )
 
 
 @app.cell(hide_code=True)
@@ -53,46 +81,16 @@ def _(mo):
 
 
 @app.cell
-def _():
+def _(np, random, tf):
     # code and /or markdown here as needed
-    import os
-    import random
-    from dataclasses import dataclass
-
-    import matplotlib.pyplot as plt
-    import numpy as np
-    import pandas as pd
-    import seaborn as sns
-    import tensorflow as tf
-    from sklearn.metrics import (
-        accuracy_score,
-        classification_report,
-        confusion_matrix,
-        f1_score,
-    )
-
     tf.random.set_seed(351)
     np.random.seed(351)
     random.seed(351)
-
-    return (
-        accuracy_score,
-        classification_report,
-        confusion_matrix,
-        dataclass,
-        f1_score,
-        np,
-        os,
-        pd,
-        plt,
-        random,
-        sns,
-        tf,
-    )
+    return
 
 
 @app.cell
-def _(np, os, pd):
+def _(os, pd):
     CUB_ROOT = "CUB_200_2011/CUB_200_2011"
 
     images_df = pd.read_csv(
@@ -164,14 +162,11 @@ def _(np, os, pd):
         .reset_index(drop=True)
     )
     test_cap = test_df.groupby("label_idx", group_keys=False).head(12).reset_index(drop=True)
-
     return (
         BATCH_SIZE,
         EPOCHS,
         INPUT_SIZE,
         class_ids,
-        data,
-        id_to_idx,
         idx_to_name,
         test_cap,
         train_cap,
@@ -261,26 +256,24 @@ def _(idx_to_name, mo, test_cap, train_cap):
 
     mo.md(
         """
-### Dataset snapshot
-Using a 12-class subset of CUB-200-2011 to keep runtime practical while preserving fine-grained classification difficulty.
-"""
+    ### Dataset snapshot
+    Using a 12-class subset of CUB-200-2011 to keep runtime practical while preserving fine-grained classification difficulty.
+    """
     )
     class_preview.head(12)
-    return (class_preview,)
+    return
 
 
 @app.cell
 def _(BATCH_SIZE, EPOCHS, INPUT_SIZE, class_ids, mo):
-    mo.md(
-        f"""
-### Training setup (fixed across model variants)
-- Input size: **{INPUT_SIZE[0]}×{INPUT_SIZE[1]}**
-- Batch size: **{BATCH_SIZE}**
-- Epochs: **{EPOCHS}**
-- Number of classes: **{len(class_ids)}**
-- Architecture: same CNN for both conditions
-"""
-    )
+    mo.md(f"""
+    ### Training setup (fixed across model variants)
+    - Input size: **{INPUT_SIZE[0]}×{INPUT_SIZE[1]}**
+    - Batch size: **{BATCH_SIZE}**
+    - Epochs: **{EPOCHS}**
+    - Number of classes: **{len(class_ids)}**
+    - Architecture: same CNN for both conditions
+    """)
     return
 
 
@@ -319,7 +312,15 @@ def _(class_ids, tf):
 
 
 @app.cell
-def _(EPOCHS, baseline_model, bbox_model, make_dataset, test_cap, train_cap):
+def _(
+    EPOCHS,
+    baseline_model,
+    bbox_model,
+    make_dataset,
+    test_cap,
+    tf,
+    train_cap,
+):
     baseline_train = make_dataset(train_cap, use_bbox=False, training=True)
     baseline_test = make_dataset(test_cap, use_bbox=False, training=False)
 
@@ -342,12 +343,20 @@ def _(EPOCHS, baseline_model, bbox_model, make_dataset, test_cap, train_cap):
         verbose=0,
         callbacks=cb,
     )
-
-    return baseline_hist, baseline_test, bbox_hist, bbox_test
+    return baseline_test, bbox_test
 
 
 @app.cell
-def _(accuracy_score, baseline_model, baseline_test, bbox_model, bbox_test, f1_score, np, pd):
+def _(
+    accuracy_score,
+    baseline_model,
+    baseline_test,
+    bbox_model,
+    bbox_test,
+    f1_score,
+    np,
+    pd,
+):
     def collect_preds(model, ds):
         y_true = np.concatenate([y.numpy() for _, y in ds], axis=0)
         probs = model.predict(ds, verbose=0)
@@ -371,16 +380,7 @@ def _(accuracy_score, baseline_model, baseline_test, bbox_model, bbox_test, f1_s
             },
         ]
     )
-
-    return (
-        probs_base,
-        probs_bbox,
-        summary,
-        y_pred_base,
-        y_pred_bbox,
-        y_true_base,
-        y_true_bbox,
-    )
+    return summary, y_pred_base, y_pred_bbox, y_true_base, y_true_bbox
 
 
 @app.cell
@@ -424,7 +424,17 @@ def _(plt, sns, summary):
 
 
 @app.cell
-def _(class_ids, confusion_matrix, idx_to_name, np, pd, y_pred_base, y_pred_bbox, y_true_base, y_true_bbox):
+def _(
+    class_ids,
+    confusion_matrix,
+    idx_to_name,
+    np,
+    pd,
+    y_pred_base,
+    y_pred_bbox,
+    y_true_base,
+    y_true_bbox,
+):
     labels = np.arange(len(class_ids))
 
     cm_base = confusion_matrix(y_true_base, y_pred_base, labels=labels)
@@ -453,7 +463,15 @@ def _(cm_base_df, cm_bbox_df, plt, sns):
 
 
 @app.cell
-def _(classification_report, idx_to_name, labels, y_pred_base, y_pred_bbox, y_true_base, y_true_bbox):
+def _(
+    classification_report,
+    idx_to_name,
+    labels,
+    y_pred_base,
+    y_pred_bbox,
+    y_true_base,
+    y_true_bbox,
+):
     target_names = [idx_to_name[i] for i in labels]
     base_report = classification_report(
         y_true_base,
@@ -495,7 +513,16 @@ def _(base_report, bbox_report, pd):
 
 
 @app.cell
-def _(INPUT_SIZE, baseline_model, bbox_model, np, plt, preprocess, test_cap, tf):
+def _(
+    INPUT_SIZE,
+    baseline_model,
+    bbox_model,
+    np,
+    plt,
+    preprocess,
+    test_cap,
+    tf,
+):
     def gradcam_heatmap(model, img_tensor, class_idx=None, layer_name="last_conv"):
         grad_model = tf.keras.models.Model(
             [model.inputs], [model.get_layer(layer_name).output, model.output]
@@ -616,11 +643,11 @@ def _(gradcam_focus_summary, mo, summary):
 
     mo.md(
         f"""
-### Compact findings
-- Accuracy change (HITL - baseline): **{delta_acc:+.3f}**
-- Macro-F1 change (HITL - baseline): **{delta_f1:+.3f}**
-- Grad-CAM focus summary: `{gradcam_focus_summary}`
-"""
+    ### Compact findings
+    - Accuracy change (HITL - baseline): **{delta_acc:+.3f}**
+    - Macro-F1 change (HITL - baseline): **{delta_f1:+.3f}**
+    - Grad-CAM focus summary: `{gradcam_focus_summary}`
+    """
     )
     return
 
