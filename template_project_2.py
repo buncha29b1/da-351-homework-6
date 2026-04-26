@@ -177,11 +177,6 @@ def _(os, pd):
 def _(BATCH_SIZE, INPUT_SIZE, np, tf):
     AUTOTUNE = tf.data.AUTOTUNE
 
-    def _read_image(path):
-        img = tf.io.read_file(path)
-        img = tf.image.decode_jpeg(img, channels=3)
-        return img
-
     def _safe_bbox_crop(img, x, y, w, h):
         shape = tf.shape(img)
         H = tf.cast(shape[0], tf.float32)
@@ -195,7 +190,10 @@ def _(BATCH_SIZE, INPUT_SIZE, np, tf):
         return img[y0:y1, x0:x1, :]
 
     def preprocess(path, label, x, y, w, h, use_bbox=False, training=False):
-        img = _read_image(path)
+        # Inline image reading to avoid closure/name-resolution issues when
+        # Marimo re-runs or serializes this function in isolation.
+        img = tf.io.read_file(path)
+        img = tf.image.decode_jpeg(img, channels=3)
         if use_bbox:
             img = _safe_bbox_crop(img, x, y, w, h)
         img = tf.image.resize(img, INPUT_SIZE)
