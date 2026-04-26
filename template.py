@@ -6,52 +6,33 @@ app = marimo.App(width="medium")
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
-# Project 2: Bird Classification, Background Leakage, and HITL Cropping (CUB-200-2011)
-**DA 351 (Advanced Descriptive Methods) — Spring 2026**  
-**Author:** Khoi Van
+    mo.md(r"""
+    __[Khoi Van]__
 
-## Introduction
-This project extends my Homework 6 CNN workflow and focuses on a key interpretability concern: **background leakage**. In bird datasets, models can learn shortcuts from scenery (water, sky, trees) instead of learning bird morphology. That can produce apparently reasonable accuracy while failing the class philosophy of interpretable, human-centered modeling.
+    # Coding Homework 6: Advanced Image Classification
 
-### Research Question
-Does a human-in-the-loop (HITL) preprocessing strategy based on CUB-200-2011 bounding boxes improve model validity by reducing background leakage, compared with a baseline CNN trained on uncropped images?
+    ## Assignment Setup
 
-### Ethical and Analytic Framing
-- Shortcut learning can encode spurious correlations and mislead downstream users.
-- We compare two pipelines with the same architecture/training plan to isolate the effect of human guidance.
-- We use **Grad-CAM** as evidence of what the model attends to, not only how accurate it is.
+    This assignment assumes you have created a new virtual enviroment with Python 3.12 and installed `marimo`, `pandas`, `seaborn`, `opencv`, `sklearn`, and `tensorflow` in this new environment.
 
-### Dataset
-We use the CUB-200-2011 metadata (`images.txt`, `image_class_labels.txt`, `train_test_split.txt`, `bounding_boxes.txt`) and focus on the same difficult pair from Homework 6:
-- 132. White-crowned Sparrow
-- 133. White-throated Sparrow
-"""
-    )
+    Run the code cells below to confirm. If the final code cell before section II, "Coding Homework," prints an accuracy score, everything is working properly.
+    """)
     return
 
 
 @app.cell
 def _():
     import marimo as mo
-    import os
-    from pathlib import Path
-    import random
-
-    import numpy as np
-    import pandas as pd
     import tensorflow as tf
+    import pandas as pd
+    from collections import Counter
+    from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
+    import numpy as np
+    import os
     import matplotlib.pyplot as plt
 
-    from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
-
-    random.seed(351)
-    np.random.seed(351)
-    tf.random.set_seed(351)
-
     return (
-        Path,
+        Counter,
         accuracy_score,
         classification_report,
         confusion_matrix,
@@ -60,422 +41,442 @@ def _():
         os,
         pd,
         plt,
-        random,
         tf,
     )
 
 
 @app.cell
-def _(Path, pd):
-    DATA_ROOT = Path("CUB_200_2011/CUB_200_2011")
-    IMAGES_ROOT = DATA_ROOT / "images"
+def _(tf):
+    model = tf.keras.models.Sequential([
+        # Note the input shape is the desired size of the image 200x200 with 3 bytes color
+        # This is the first convolution
+        tf.keras.layers.Conv2D(32, (3,3), activation='relu', input_shape=(200, 200, 3)),
+        tf.keras.layers.MaxPooling2D(2, 2),
+        tf.keras.layers.Dropout(0.25),
+        # The second convolution
+        tf.keras.layers.Conv2D(32, (3,3), activation='relu'),
+        tf.keras.layers.MaxPooling2D(2,2),
+        tf.keras.layers.Dropout(0.25),
+        # The third convolution
+        tf.keras.layers.Conv2D(64, (3,3), activation='relu'),
+        tf.keras.layers.MaxPooling2D(2,2),
+        tf.keras.layers.Dropout(0.25),
+        # The fourth convolution
+        tf.keras.layers.Conv2D(64, (3,3), activation='relu'),
+        tf.keras.layers.MaxPooling2D(2,2),
+        tf.keras.layers.Dropout(0.25),
+        # Flatten the results to feed into a DNN
+        tf.keras.layers.Flatten(),
+        # 512 neuron hidden layer
+        tf.keras.layers.Dense(512, activation='relu'),
+        # Only 1 output neuron. It will contain a value from 0-1 
+        tf.keras.layers.Dense(1, activation='sigmoid')])
 
-    images_df = pd.read_csv(
-        DATA_ROOT / "images.txt",
-        sep=" ",
-        names=["image_id", "relative_path"],
-    )
-    labels_df = pd.read_csv(
-        DATA_ROOT / "image_class_labels.txt",
-        sep=" ",
-        names=["image_id", "class_id"],
-    )
-    split_df = pd.read_csv(
-        DATA_ROOT / "train_test_split.txt",
-        sep=" ",
-        names=["image_id", "is_train"],
-    )
-    bbox_df = pd.read_csv(
-        DATA_ROOT / "bounding_boxes.txt",
-        sep=" ",
-        names=["image_id", "x", "y", "width", "height"],
-    )
-    classes_df = pd.read_csv(
-        DATA_ROOT / "classes.txt",
-        sep=" ",
-        names=["class_id", "class_name"],
-    )
-
-    cub = (
-        images_df.merge(labels_df, on="image_id")
-        .merge(split_df, on="image_id")
-        .merge(bbox_df, on="image_id")
-        .merge(classes_df, on="class_id")
-    )
-    cub["filepath"] = cub["relative_path"].map(lambda p: str(IMAGES_ROOT / p))
-
-    TARGET_CLASSES = {
-        132: "132.White-crowned_Sparrow",
-        133: "133.White-throated_Sparrow",
-    }
-    cub_pair = cub[cub["class_id"].isin(TARGET_CLASSES)].copy()
-
-    cub_pair.head()
-    return DATA_ROOT, TARGET_CLASSES, cub_pair
+    model.summary()
+    return (model,)
 
 
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(
-        r"""
-## Methods
-### Experimental design
-We fit two binary CNN pipelines with the same architecture:
-1. **Baseline CNN**: trained on uncropped RGB images.
-2. **HITL Crop CNN**: trained on images cropped to the human-annotated bird bounding box.
-
-### Why this is appropriate
-- Holding architecture/training settings constant isolates the causal role of preprocessing.
-- Bounding boxes represent explicit human knowledge about where the bird is located.
-- Grad-CAM helps evaluate whether each model's attention aligns with the scientific object (bird) versus context.
-
-### Strengths and weaknesses
-- Strength: clear A/B comparison tied to interpretability goals.
-- Weakness: bounding boxes are expensive annotations and may still include some background.
-- Weakness: binary task on one species pair limits broad generalization; this is a validity-focused extension.
-"""
-    )
+@app.cell
+def _(model, tf):
+    RMSprop = tf.keras.optimizers.RMSprop
+    model.compile(loss='binary_crossentropy',optimizer=RMSprop(),metrics=['accuracy'])
     return
 
 
 @app.cell
-def _(Path, TARGET_CLASSES, cub_pair, np, os, tf):
-    IMG_SIZE = (200, 200)
-    BATCH_SIZE = 16
-    EPOCHS = 5
-    MAX_PER_CLASS = 120
+def _(tf):
+    training_set = tf.keras.utils.image_dataset_from_directory(
+      'sample_birds',
+      seed=123,
+      image_size=(200, 200),
+      subset='training',
+      validation_split=0.3,
+      batch_size=5)
 
-    class_to_label = {132: 0, 133: 1}
+    validation_set = tf.keras.utils.image_dataset_from_directory(
+      'sample_birds',
+      shuffle=True,
+      seed=17,
+      image_size=(200, 200),
+      validation_split=0.3,
+      subset='validation',
+      batch_size=5)
 
-    def decode_and_resize(path):
-        img = tf.io.read_file(path)
-        img = tf.image.decode_jpeg(img, channels=3)
-        img = tf.image.resize(img, IMG_SIZE)
-        img = tf.cast(img, tf.float32) / 255.0
-        return img
+    holdout_set_all = tf.keras.utils.image_dataset_from_directory(
+      'sample_birds',
+      shuffle=False,
+      seed=17,
+      image_size=(200, 200),
+      batch_size=1) # batch size has to be one for this set
 
-    def decode_crop_and_resize(path, x, y, w, h):
-        img = tf.io.read_file(path)
-        img = tf.image.decode_jpeg(img, channels=3)
-        shape = tf.shape(img)
-        ih = tf.cast(shape[0], tf.float32)
-        iw = tf.cast(shape[1], tf.float32)
-
-        x0 = tf.cast(tf.maximum(0.0, x), tf.int32)
-        y0 = tf.cast(tf.maximum(0.0, y), tf.int32)
-        x1 = tf.cast(tf.minimum(iw, x + w), tf.int32)
-        y1 = tf.cast(tf.minimum(ih, y + h), tf.int32)
-
-        crop_w = tf.maximum(1, x1 - x0)
-        crop_h = tf.maximum(1, y1 - y0)
-
-        img = tf.image.crop_to_bounding_box(img, y0, x0, crop_h, crop_w)
-        img = tf.image.resize(img, IMG_SIZE)
-        img = tf.cast(img, tf.float32) / 255.0
-        return img
-
-    sampled = []
-    for class_id in TARGET_CLASSES:
-        class_rows = cub_pair[cub_pair["class_id"] == class_id].sample(
-            n=min(MAX_PER_CLASS, (cub_pair["class_id"] == class_id).sum()),
-            random_state=351,
-        )
-        sampled.append(class_rows)
-    pair_df = (
-        tf.keras.utils.to_categorical([0]) and None
-    )  # quick no-op to keep TF warm in marimo
-    import pandas as _pd
-
-    pair_df = _pd.concat(sampled).sort_values("image_id").reset_index(drop=True)
-    pair_df["label"] = pair_df["class_id"].map(class_to_label)
-
-    train_df = pair_df[pair_df["is_train"] == 1].copy()
-    test_df = pair_df[pair_df["is_train"] == 0].copy()
-
-    def build_baseline_dataset(df, training=False):
-        ds = tf.data.Dataset.from_tensor_slices(
-            (df["filepath"].values, df["label"].values.astype("int32"))
-        )
-        if training:
-            ds = ds.shuffle(len(df), seed=351)
-        ds = ds.map(lambda p, y: (decode_and_resize(p), y), num_parallel_calls=tf.data.AUTOTUNE)
-        return ds.batch(BATCH_SIZE).prefetch(tf.data.AUTOTUNE)
-
-    def build_cropped_dataset(df, training=False):
-        ds = tf.data.Dataset.from_tensor_slices(
-            (
-                df["filepath"].values,
-                df["x"].values.astype("float32"),
-                df["y"].values.astype("float32"),
-                df["width"].values.astype("float32"),
-                df["height"].values.astype("float32"),
-                df["label"].values.astype("int32"),
-            )
-        )
-        if training:
-            ds = ds.shuffle(len(df), seed=351)
-        ds = ds.map(
-            lambda p, x, y, w, h, label: (decode_crop_and_resize(p, x, y, w, h), label),
-            num_parallel_calls=tf.data.AUTOTUNE,
-        )
-        return ds.batch(BATCH_SIZE).prefetch(tf.data.AUTOTUNE)
-
-    train_baseline = build_baseline_dataset(train_df, training=True)
-    test_baseline = build_baseline_dataset(test_df)
-    train_crop = build_cropped_dataset(train_df, training=True)
-    test_crop = build_cropped_dataset(test_df)
-
-    summary_df = pair_df.groupby(["class_id", "class_name", "is_train"]).size().reset_index(name="n")
-    summary_df
+    train_file_paths = training_set.file_paths
+    validation_file_paths = validation_set.file_paths
+    holdout_file_paths = holdout_set_all.file_paths
     return (
-        EPOCHS,
-        IMG_SIZE,
-        pair_df,
-        test_baseline,
-        test_crop,
-        test_df,
-        train_baseline,
-        train_crop,
-        train_df,
+        holdout_file_paths,
+        holdout_set_all,
+        training_set,
+        validation_file_paths,
+        validation_set,
     )
 
 
 @app.cell
-def _(IMG_SIZE, tf):
-    def make_cnn(input_shape=(200, 200, 3)):
-        model = tf.keras.Sequential(
-            [
-                tf.keras.layers.Input(shape=input_shape),
-                tf.keras.layers.Conv2D(32, (3, 3), activation="relu"),
-                tf.keras.layers.MaxPooling2D(2, 2),
-                tf.keras.layers.Dropout(0.25),
-                tf.keras.layers.Conv2D(32, (3, 3), activation="relu"),
-                tf.keras.layers.MaxPooling2D(2, 2),
-                tf.keras.layers.Dropout(0.25),
-                tf.keras.layers.Conv2D(64, (3, 3), activation="relu"),
-                tf.keras.layers.MaxPooling2D(2, 2),
-                tf.keras.layers.Dropout(0.25),
-                tf.keras.layers.Conv2D(64, (3, 3), activation="relu", name="last_conv"),
-                tf.keras.layers.MaxPooling2D(2, 2),
-                tf.keras.layers.Dropout(0.25),
-                tf.keras.layers.Flatten(),
-                tf.keras.layers.Dense(256, activation="relu"),
-                tf.keras.layers.Dense(1, activation="sigmoid"),
-            ]
+def _(holdout_file_paths, holdout_set_all, validation_file_paths):
+    images = []
+    labels = []
+    for e, image_label in enumerate(holdout_set_all):
+        f = holdout_file_paths[e]
+        if f in validation_file_paths:
+            images.append(image_label[0].numpy())
+            labels.append(image_label[1].numpy())
+    len(validation_file_paths), len(images), len(labels)
+    return images, labels
+
+
+@app.cell
+def _(model, training_set, validation_set):
+    history = model.fit(training_set,
+          epochs=11,
+          verbose=1,
+          validation_data = validation_set)
+
+    model.evaluate(validation_set)
+    return
+
+
+@app.cell
+def _(images, model, tf):
+    img_arrays = []
+    for i in images:
+        img_arrays.append(i)
+
+    test_dataset = tf.data.Dataset.from_tensor_slices(img_arrays)
+    preds = model.predict(test_dataset)
+    preds[0]
+    return (preds,)
+
+
+@app.cell
+def _(Counter, labels):
+    c = Counter([i[0] for i in labels])
+    c
+    return (c,)
+
+
+@app.cell
+def _(c, labels, pd, preds):
+    df = pd.DataFrame()
+    df['true_label'] = [i[0] for i in labels]
+    df['predict_probability'] = [i[0] for i in preds]
+    df = df.sort_values(by='predict_probability')
+    inferred_labels = [0 for i in range(c[0])] + [1 for i in range(c[1])]
+    df['predicted_label'] = inferred_labels 
+    df['correct'] = df['true_label'] == df['predicted_label']
+    df
+    return (df,)
+
+
+@app.cell
+def _(df):
+    len(df.loc[df['correct'] == True])/len(df)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## II. Coding Homework
+
+    To complete this assignment, you will need to:
+
+    1. Download the full dataset and unzip the compressed files
+    2. Select bird species to classify (see below)
+    3. Set up files and folders for classification
+    4. Adapt the code above to train and evaluate various classifiers
+
+
+
+    ### 1. Download the full dataset and unzip the compressed files
+
+    Dataset link is located in `README.md`. The CUB 200 dataset has a unique id number and a species name in each folder name.
+
+    ### 2. Select Bird Species to Classify
+
+    Identify three sets of bird pairings and write a hypothesis about how difficult it will be for a model to differentiate the species from one another. You should select pairings so that you can reasonably predict different levels of success (e.g. an easy, medium, and hard task). For example, the sample pairing is the Black-footed Albatross vs. Artic Tern, and we might predict this classification task to be relatively easy.  (When making your selections, please do not use the sample pairing.)
+
+    ### 3. Set up Files and Folders
+
+    Tensorflow's `image_dataset_from_directory` method is _much_ faster than openCV, but it requires your files and folders to be set up in a specific way. You will need move files around as you go to create the following structure:
+
+    ```
+    > parent_folder
+    	> class_a_folder
+    		class_a_img_1
+    		class_a_img_2
+    		etc.
+    	> class_b_folder
+    		class_b_img_1
+    		class_b_img_2
+    		etc.
+    ```
+
+    Once you have this structure, you can use it to define training and validation sets. Labels can be supplied, but it's much easier to have Tensorflow infer them from the folder names.
+
+    __Note:__ I have set up the sample_birds folder this way as a guide for you. You can easily create three new folders and call them `easy`, `medium`, and `hard` respectively.
+
+    ### 4. Train and Evaluate Your Models
+
+    Once your setup is complete, you will train and validate binary classification models for all of your pairs. Every model should be a CNN with the same architecture. (You can modify the architecture I've provided, but you shouldn't use different setups for different classifiers.)
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### 2. Select Bird Species to Classify
+
+    #### Easy Task: 100. Brown Pelican vs. 068. Ruby-throated Hummingbird
+
+    - Hypothesis: Differentiating these two species will be an easy task for the model. These birds have drastically distinct morphologies, sizes, and characteristic environments. The pelican features a large body, distinctive bill, and a predominantly brown/gray color palette, whereas the hummingbird is tiny with iridescent green and red feathers. The Convolutional Neural Network (CNN) should rapidly learn these obvious macroscopic and color-based differences, resulting in high accuracy and few misclassifications.
+
+    #### Medium Task: 073. Blue Jay vs. 017. Cardinal
+
+    - Hypothesis: This task will present a medium level of difficulty. Both species are similarly sized passerine birds with crests on their heads, and they are often photographed in similar environments (such as backyard feeders or tree branches). While their physical silhouettes and backgrounds share similarities, they have stark, contrasting primary colors (bright blue vs. bright red). The model will likely rely heavily on these color channel differences to achieve a reasonably high accuracy, but may make occasional errors if lighting conditions obscure the colors or if the images are predominantly in grayscale.
+
+    #### Hard Task: 132. White-crowned Sparrow vs. 133. White-throated Sparrow
+
+    - Hypothesis: Differentiating these two sparrows will be a hard task. Because they belong to the same family, they share nearly identical body shapes, beak structures, typical postures, and overall brown-streaked plumage. The primary visual differences are fine-grained, localized details on their heads (the presence of a white throat patch vs. specific crown striping). A basic CNN might struggle to focus on these localized, subtle features without an attention mechanism, leading to a higher rate of false positives and false negatives, and an overall lower accuracy.
+    """)
+    return
+
+
+@app.cell
+def _(model, np, os, tf):
+    # Define the parent folder paths based on your task difficulty pairings
+    # Ensure these match the actual names of your parent folders
+    parent_folders = ['easy', 'medium', 'hard']
+
+    # Standard image size and batch size for the model
+    IMG_SIZE = (200, 200) 
+    BATCH_SIZE = 32
+
+    def evaluate_task(parent_folder):
+        print(f"==================================================")
+        print(f"RESULTS FOR: {parent_folder.upper()} TASK")
+        print(f"==================================================")
+
+        # 1. Load data using the specified folder structure
+        # image_dataset_from_directory automatically treats subfolders (class_a_folder, class_b_folder) as classes
+        if not os.path.exists(parent_folder):
+            print(f"Directory '{parent_folder}' not found. Please ensure the path is correct.\n")
+            return
+
+        dataset = tf.keras.utils.image_dataset_from_directory(
+            parent_folder,
+            shuffle=False, # Shuffle must be False to align predictions with true labels
+            image_size=IMG_SIZE,
+            batch_size=BATCH_SIZE
         )
-        model.compile(
-            loss="binary_crossentropy",
-            optimizer=tf.keras.optimizers.RMSprop(learning_rate=1e-3),
-            metrics=["accuracy"],
+
+        class_names = dataset.class_names
+        print(f"Comparing: {class_names[0]} vs {class_names[1]}\n")
+
+        # Extract true labels sequentially from the dataset
+        y_true = np.concatenate([y for x, y in dataset], axis=0)
+
+        # Assuming your trained model is stored in a variable named 'model'
+        # If you have separate models for each task, you would load them dynamically here 
+        # e.g., model = tf.keras.models.load_model(f'{parent_folder}_model.keras')
+
+        try:
+            # Generate predictions
+            y_pred_probs = model.predict(dataset)
+
+            # Convert probabilities to binary class predictions (0 or 1)
+            y_pred = (y_pred_probs > 0.5).astype(int).flatten()
+
+        except NameError:
+            print("Error: The 'model' variable is not defined. Make sure you have trained and assigned your model.")
+
+    # Run the evaluation loop over the 3 folder structures
+    for folder in parent_folders:
+        evaluate_task(folder)
+    return BATCH_SIZE, IMG_SIZE, folder, parent_folders
+
+
+@app.cell
+def _(mo):
+    mo.md(r"""
+    ### Results Code
+
+    For each model, report the following results:
+
+    1. Overall accuracy of the model
+    2. A confusion matrix of your validation set's True Positives, True Negatives, False Negatives, and False Positives
+    3. Per class precision and recall (using `scikit-learn` functions)
+    """)
+    return
+
+
+@app.cell
+def _(
+    BATCH_SIZE,
+    IMG_SIZE,
+    accuracy_score,
+    classification_report,
+    confusion_matrix,
+    folder,
+    model,
+    np,
+    os,
+    parent_folders,
+    plt,
+    tf,
+):
+    for folder1 in parent_folders:
+        print(f"==================================================")
+        print(f"METRICS FOR: {folder1.upper()} TASK")
+        print(f"==================================================")
+
+        if not os.path.exists(folder1):
+            print(f"Directory '{folder1}' not found. Skipping...\n")
+            continue
+
+        dataset = tf.keras.utils.image_dataset_from_directory(
+            folder1,
+            shuffle=False,
+            image_size=IMG_SIZE,
+            batch_size=BATCH_SIZE
         )
-        return model
 
-    baseline_model = make_cnn((*IMG_SIZE, 3))
-    crop_model = make_cnn((*IMG_SIZE, 3))
-    return baseline_model, crop_model
+        # Extract true labels
+        y_true = np.concatenate([y for x, y in dataset], axis=0)
 
+        # Generate predictions
+        y_pred_probs = model.predict(dataset)
+        y_pred = (y_pred_probs > 0.5).astype(int).flatten()
 
-@app.cell
-def _(EPOCHS, baseline_model, crop_model, test_baseline, test_crop, train_baseline, train_crop):
-    history_baseline = baseline_model.fit(
-        train_baseline,
-        validation_data=test_baseline,
-        epochs=EPOCHS,
-        verbose=1,
-    )
-    history_crop = crop_model.fit(
-        train_crop,
-        validation_data=test_crop,
-        epochs=EPOCHS,
-        verbose=1,
-    )
-    return history_baseline, history_crop
-
-
-@app.cell
-def _(accuracy_score, baseline_model, classification_report, confusion_matrix, crop_model, np, pd, test_baseline, test_crop):
-    def evaluate_binary(model, dataset, model_name):
-        y_true = np.concatenate([y.numpy() for _, y in dataset], axis=0)
-        y_prob = model.predict(dataset, verbose=0).flatten()
-        y_pred = (y_prob >= 0.5).astype(int)
-
+        # 1. Report Overall accuracy
         acc = accuracy_score(y_true, y_pred)
+        print(f"Overall Accuracy: {acc:.4f}\n")
+
+        # 2. Report Confusion Matrix using matplotlib
         cm = confusion_matrix(y_true, y_pred)
-        report = classification_report(
-            y_true,
-            y_pred,
-            target_names=["White-crowned", "White-throated"],
-            output_dict=True,
-        )
-        return {
-            "model": model_name,
-            "accuracy": acc,
-            "tn": int(cm[0, 0]),
-            "fp": int(cm[0, 1]),
-            "fn": int(cm[1, 0]),
-            "tp": int(cm[1, 1]),
-            "precision_white_crowned": report["White-crowned"]["precision"],
-            "recall_white_crowned": report["White-crowned"]["recall"],
-            "precision_white_throated": report["White-throated"]["precision"],
-            "recall_white_throated": report["White-throated"]["recall"],
-        }
 
-    baseline_metrics = evaluate_binary(baseline_model, test_baseline, "Baseline (Uncropped)")
-    crop_metrics = evaluate_binary(crop_model, test_crop, "HITL Bounding Box Crop")
+        fig, ax = plt.subplots(figsize=(6, 6))
+        cax = ax.matshow(cm, cmap=plt.cm.Blues, alpha=0.7)
+        plt.title(f"Confusion Matrix: {folder.capitalize()} Task", pad=20)
+        fig.colorbar(cax)
 
-    metrics_df = pd.DataFrame([baseline_metrics, crop_metrics])
-    metrics_df
-    return metrics_df
+        # Annotate TP, TN, FP, FN counts directly on the matrix
+        for k in range(cm.shape[0]):
+            for j in range(cm.shape[1]):
+                ax.text(j, k, str(cm[k, j]), va='center', ha='center', fontsize=12, fontweight='bold')
 
+        plt.xlabel('Predicted Label', fontsize=11)
+        plt.ylabel('True Label', fontsize=11)
+        ax.set_xticks([0, 1])
+        ax.set_yticks([0, 1])
+        ax.set_xticklabels(dataset.class_names)
+        ax.set_yticklabels(dataset.class_names)
+        plt.show()
 
-@app.cell
-def _(history_baseline, history_crop, metrics_df, mo, plt):
-    fig, axes = plt.subplots(1, 2, figsize=(12, 4))
-
-    axes[0].plot(history_baseline.history["accuracy"], label="Baseline Train")
-    axes[0].plot(history_baseline.history["val_accuracy"], label="Baseline Val")
-    axes[0].plot(history_crop.history["accuracy"], label="Crop Train")
-    axes[0].plot(history_crop.history["val_accuracy"], label="Crop Val")
-    axes[0].set_title("Accuracy by Epoch")
-    axes[0].set_xlabel("Epoch")
-    axes[0].set_ylabel("Accuracy")
-    axes[0].legend()
-
-    axes[1].bar(metrics_df["model"], metrics_df["accuracy"])
-    axes[1].set_ylim(0, 1)
-    axes[1].set_title("Holdout Accuracy")
-    axes[1].set_ylabel("Accuracy")
-    axes[1].tick_params(axis="x", rotation=12)
-
-    plt.tight_layout()
-    mo.as_html(fig)
-    return
-
-
-@app.cell
-def _(IMG_SIZE, baseline_model, crop_model, np, plt, test_df, tf):
-    def gradcam_heatmap(model, image_tensor, layer_name="last_conv"):
-        grad_model = tf.keras.models.Model(
-            [model.inputs], [model.get_layer(layer_name).output, model.output]
-        )
-        with tf.GradientTape() as tape:
-            conv_outputs, preds = grad_model(image_tensor)
-            loss = preds[:, 0]
-        grads = tape.gradient(loss, conv_outputs)
-        pooled = tf.reduce_mean(grads, axis=(0, 1, 2))
-        conv_outputs = conv_outputs[0]
-        heatmap = tf.reduce_sum(conv_outputs * pooled, axis=-1)
-        heatmap = tf.maximum(heatmap, 0) / (tf.reduce_max(heatmap) + 1e-8)
-        return heatmap.numpy()
-
-    sample_row = test_df.iloc[0]
-    raw = tf.image.decode_jpeg(tf.io.read_file(sample_row["filepath"]), channels=3)
-    raw_f = tf.cast(raw, tf.float32) / 255.0
-
-    baseline_in = tf.image.resize(raw_f, IMG_SIZE)[None, ...]
-
-    x0 = int(max(0, sample_row["x"]))
-    y0 = int(max(0, sample_row["y"]))
-    x1 = int(min(raw.shape[1], sample_row["x"] + sample_row["width"]))
-    y1 = int(min(raw.shape[0], sample_row["y"] + sample_row["height"]))
-    cropped = raw_f[y0:y1, x0:x1, :]
-    crop_in = tf.image.resize(cropped, IMG_SIZE)[None, ...]
-
-    hb = gradcam_heatmap(baseline_model, baseline_in)
-    hc = gradcam_heatmap(crop_model, crop_in)
-
-    fig, axes = plt.subplots(2, 2, figsize=(9, 8))
-    axes[0, 0].imshow(baseline_in[0])
-    axes[0, 0].set_title("Baseline Input")
-    axes[0, 1].imshow(baseline_in[0])
-    axes[0, 1].imshow(hb, cmap="jet", alpha=0.45)
-    axes[0, 1].set_title("Baseline Grad-CAM")
-
-    axes[1, 0].imshow(crop_in[0])
-    axes[1, 0].set_title("Cropped Input (HITL)")
-    axes[1, 1].imshow(crop_in[0])
-    axes[1, 1].imshow(hc, cmap="jet", alpha=0.45)
-    axes[1, 1].set_title("Cropped Grad-CAM")
-
-    for ax in axes.ravel():
-        ax.axis("off")
-
-    plt.tight_layout()
-    fig
+        # 3. Report Per class precision and recall
+        print("Classification Report (Precision & Recall):")
+        print(classification_report(y_true, y_pred, target_names=dataset.class_names))
+        print("\n")
     return
 
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
-## Results
-- The table reports holdout accuracy, confusion-matrix counts, and class-level precision/recall for each model.
-- The learning-curve panel compares convergence and overfitting behavior.
-- The Grad-CAM panel provides qualitative attention evidence.
+    mo.md(r"""
+    ### Interpretation
 
-### What to look for
-- If the HITL crop model improves accuracy and/or recall balance, that supports reduced shortcut dependence.
-- In Grad-CAM, the strongest evidence is heat concentrated on the bird body/head for cropped images.
-"""
-    )
+    1. Interpret your output, highlighting the key results and explaining the main takeaways. Revisit your hypotheses from the introduction. How did your models do compared to your hypotheses? What was surprising and why?
+    """)
     return
 
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
-## Interpretation
-This project prioritizes **interpretability and validity** over raw score maximization.
+    mo.md(r"""
+    The model's performance on the test sets yielded several unexpected results that directly challenge the initial biological hypotheses.
 
-If the cropped model attends more consistently to the bird and performs at least comparably, then human guidance is improving model behavior in a way that aligns with DA 351 course goals. Even if accuracy gains are modest, a shift in attention maps away from background context is an important scientific result: the model is learning a more causally plausible signal.
+    * Easy Task (Pelican vs. Hummingbird): Contrary to the hypothesis that this would be the simplest task due to distinct morphologies, it was actually the worst-performing model with an overall accuracy of 0.4167. The model failed to learn the "obvious" macroscopic differences, correctly identifying only 6 Hummingbirds out of 60.
+    * Medium Task (Blue Jay vs. Cardinal): This task aligned most closely with the hypothesis, emerging as the most successful model with an Overall Accuracy of 0.6239. While far from perfect, the model likely leveraged the stark color contrast to achieve its highest performance tier.
+    * Hard Task (Sparrows): The hypothesis predicted this would be the hardest task. However, it achieved an Overall Accuracy of 0.5083, significantly outperforming the "Easy" task. While still struggling with fine-grained details, the model showed a better ability to distinguish these similar species than it did with the Pelican and Hummingbird.
 
-### Caveats and limits
-- Binary species design limits generalization to all 200 classes.
-- Bounding boxes may still include habitat cues.
-- Grad-CAM is suggestive, not a full causal proof of feature use.
-
-### Future extension
-A direct next step is to expand to multiple class pairs and compare three settings: uncropped, bounding-box cropped, and segmentation-mask cropped, then quantify overlap between Grad-CAM heatmaps and annotated bird regions.
-"""
-    )
+    The most surprising takeaway is the total failure of the "Easy" task. In deep learning, macroscopic differences usually yield high accuracy. The fact that the sparrow model (Hard) outperformed the pelican/hummingbird model (Easy) suggests that the CNN may be focusing on "background noise" (like foliage vs. water) or that the training data for the "Easy" classes lacked the internal consistency the model needed to generalize.
+    """)
     return
 
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
-## Uses of Python (Technical Reflection)
-
-| Dependency | Role in project | Rationale |
-|---|---|---|
-| marimo | Notebook workflow + markdown narrative | Reproducible, literate analysis in one file |
-| pandas | Metadata joins and experiment table prep | Reliable tabular preprocessing |
-| tensorflow/keras | CNN modeling, tf.data pipeline, Grad-CAM gradients | Efficient deep learning stack already used in HW6 |
-| matplotlib | Training curves and Grad-CAM visualizations | Clear communication for non-technical readers |
-| scikit-learn | Accuracy, confusion matrix, precision/recall | Standard classification diagnostics |
-
-### Reproducibility and readability choices
-- Fixed random seeds for numpy/tensorflow.
-- Shared architecture and optimizer between variants.
-- Helper functions for dataset construction and model evaluation to avoid copy/paste drift.
-"""
-    )
+    mo.md(r"""
+    2. Discuss the precision and recall scores of each class for your various models. What seems to be your strongest model and why?
+    """)
     return
 
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
-## References
-- Wah, C., Branson, S., Welinder, P., Perona, P., & Belongie, S. (2011). *The Caltech-UCSD Birds-200-2011 Dataset*. California Institute of Technology.
-- Selvaraju, R. R., Cogswell, M., Das, A., Vedantam, R., Parikh, D., & Batra, D. (2017). Grad-CAM: Visual Explanations from Deep Networks via Gradient-based Localization. *Proceedings of ICCV*.
-- Chollet, F. et al. (TensorFlow/Keras documentation).
-"""
-    )
+    mo.md(r"""
+    The classification reports reveal a significant "majority-class" bias across all three tasks, where the model essentially defaults to one species per pair.
+
+    | Task | Class | Precision | Recall | F1-Score | Support |
+    | :--- | :--- | :--- | :--- | :--- | :--- |
+    | **Easy** | Hummingbird | 0.27 | 0.10 | 0.15 | 60 |
+    | | Brown Pelican | 0.45 | 0.73 | 0.56 | 60 |
+    | **Medium** | Cardinal | **0.84** | 0.28 | 0.42 | 57 |
+    | | Blue Jay | 0.58 | **0.95** | **0.72** | 60 |
+    | **Hard** | White-crowned Sparrow | 0.53 | 0.13 | 0.21 | 60 |
+    | | White-throated Sparrow | 0.50 | 0.88 | 0.64 | 60 |
+
+    **Strongest Model:**
+    The Medium Task (Blue Jay vs. Cardinal) is the strongest model. It boasts the highest F1-score (0.72) and the highest Precision (0.84) of any individual class. This indicates that while the model has a bias toward Blue Jays (high recall), its "guesses" for Cardinals are highly reliable when they do occur.
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    3. As a whole, what does this analysis tell us? What are the strengths/limitations of  this data set? What are the strengths/limitations of this method? What is one future direction you could envision for future data analysts or data collectors?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    * The dataset is well-structured for testing specific biological similarities. However, a major limitation is the potential for "leaky" features—environmental cues (backgrounds) that the model learns instead of the birds themselves. The low accuracy across the board suggests the dataset might need more varied training examples to help the model ignore the background.
+    * Using a standard CNN architecture is a strength for general image recognition, but a limitation for fine-grained classification. Without an attention mechanism or higher resolution, the model cannot "zoom in" on the specific crown stripes or throat patches that define the sparrow species.
+    * A valuable direction for future analysts would be the implementation of Transfer Learning using pre-trained models (like ResNet or EfficientNet). By starting with a model that already "knows" how to see shapes and textures, analysts can fine-tune it to focus on the subtle biological markers that this basic CNN missed.
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    4. Take a step back and analyze your own use of code. Provide some rationale for choices you've made. How did you (or how might we) refactor the code to avoid repeating the same blocks three times?
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    The code utilized `classification_report` and `confusion_matrix` from `sklearn.metrics`, which is the industry standard for evaluating multi-class performance. This choice provides a granular look at where the model fails (e.g., distinguishing between high precision and high recall) rather than relying on accuracy alone, which can be misleading in biased models.
+
+    A primary observation in the current code is that the titles of the Confusion Matrices for the "Easy" and "Medium" tasks still erroneously read "Hard Task." This is a side effect of manually copying and pasting code blocks.
+
+    To avoid repeating the same blocks three times and eliminate labeling errors, the code should be refactored into a reusable function combined with a list of dictionaries.
+    """)
     return
 
 
