@@ -177,25 +177,21 @@ def _(os, pd):
 def _(BATCH_SIZE, INPUT_SIZE, np, tf):
     AUTOTUNE = tf.data.AUTOTUNE
 
-    def _safe_bbox_crop(img, x, y, w, h):
-        shape = tf.shape(img)
-        H = tf.cast(shape[0], tf.float32)
-        W = tf.cast(shape[1], tf.float32)
-
-        x0 = tf.clip_by_value(tf.cast(tf.floor(x), tf.int32), 0, tf.cast(W, tf.int32) - 1)
-        y0 = tf.clip_by_value(tf.cast(tf.floor(y), tf.int32), 0, tf.cast(H, tf.int32) - 1)
-        x1 = tf.clip_by_value(tf.cast(tf.ceil(x + w), tf.int32), x0 + 1, tf.cast(W, tf.int32))
-        y1 = tf.clip_by_value(tf.cast(tf.ceil(y + h), tf.int32), y0 + 1, tf.cast(H, tf.int32))
-
-        return img[y0:y1, x0:x1, :]
-
     def preprocess(path, label, x, y, w, h, use_bbox=False, training=False):
-        # Inline image reading to avoid closure/name-resolution issues when
-        # Marimo re-runs or serializes this function in isolation.
+        # Keep preprocessing fully self-contained to avoid NameError issues
+        # when Marimo re-runs or serializes this function in isolation.
         img = tf.io.read_file(path)
         img = tf.image.decode_jpeg(img, channels=3)
         if use_bbox:
-            img = _safe_bbox_crop(img, x, y, w, h)
+            shape = tf.shape(img)
+            H = tf.cast(shape[0], tf.float32)
+            W = tf.cast(shape[1], tf.float32)
+
+            x0 = tf.clip_by_value(tf.cast(tf.floor(x), tf.int32), 0, tf.cast(W, tf.int32) - 1)
+            y0 = tf.clip_by_value(tf.cast(tf.floor(y), tf.int32), 0, tf.cast(H, tf.int32) - 1)
+            x1 = tf.clip_by_value(tf.cast(tf.ceil(x + w), tf.int32), x0 + 1, tf.cast(W, tf.int32))
+            y1 = tf.clip_by_value(tf.cast(tf.ceil(y + h), tf.int32), y0 + 1, tf.cast(H, tf.int32))
+            img = img[y0:y1, x0:x1, :]
         img = tf.image.resize(img, INPUT_SIZE)
         img = tf.cast(img, tf.float32) / 255.0
 
