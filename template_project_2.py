@@ -518,8 +518,11 @@ def _(
     tf,
 ):
     def gradcam_heatmap(model, img_tensor, class_idx=None, layer_name="last_conv"):
+        # Ensure Sequential model has defined input/output tensors even if this
+        # cell is run before training/evaluation cells in Marimo.
+        _ = model(img_tensor, training=False)
         grad_model = tf.keras.models.Model(
-            [model.inputs], [model.get_layer(layer_name).output, model.output]
+            [model.inputs], [model.get_layer(layer_name).output, model.outputs[0]]
         )
         with tf.GradientTape() as tape:
             conv_out, preds = grad_model(img_tensor)
